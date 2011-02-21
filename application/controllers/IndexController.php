@@ -13,7 +13,7 @@ class IndexController extends Zend_Controller_Action
         $signed_request = $this->_getParam('signed_request', null);
         if(empty($signed_request))
         {
-            throw new Exception('Security Error');
+            throw new Application_Model_FacebookException('Security Error');
         }
         $FB = new Application_Model_Facebook($signed_request);
 
@@ -30,7 +30,8 @@ class IndexController extends Zend_Controller_Action
 
         // set some view variables...
         $userInfo = $FB->getUserInfo();
-        Zend_Debug::dump($userInfo);
+        $userFriends = $FB->getUserFriends(true);
+        Zend_Debug::dump($userFriends);
     }
 
 }

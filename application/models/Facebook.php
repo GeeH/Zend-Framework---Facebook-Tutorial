@@ -37,20 +37,24 @@ class Application_Model_Facebook
      * Facebook Graph Entry Point
      */
     const FACEBOOK_GRAPH_URL = 'https://graph.facebook.com/';
+    /**
+     * Facebook FQL Entry Point
+     */
+    const FACEBOOK_FQL_URL = 'https://api.facebook.com/method/fql.query';
 
     public function __construct($signed_request)
     {
         // Check the signed request is what we would have expected
         if(!is_string($signed_request) || empty($signed_request))
         {
-            throw new Exception('Invalid signed_request');
+            throw new Application_Model_FacebookException('Invalid signed_request');
         }
         // Set the private variable to the passed string
         $this->_fbSigs = $signed_request;
         // Parse the sigs
         $this->_parseSignedRequest();
     }
-
+    
     /**
      * Returns information about the currently logged in user
      * @return array
@@ -59,6 +63,25 @@ class Application_Model_Facebook
     {
         $url = self::FACEBOOK_GRAPH_URL.'me';
         return $this->_getFromGraph($url);
+    }
+
+    /**
+     * Returns a list of a user's Facebook friends
+     * @param bool $justUsingApp Only return friends who are using this app?
+     * @return array
+     */
+    public function getUserFriends($justUsingApp = false)
+    {
+        if(!$justUsingApp)
+        {
+            $url = self::FACEBOOK_GRAPH_URL.'me/friends';
+            return $this->_getFromGraph($url);
+        }
+        else
+        {
+            $fql = "SELECT uid FROM user WHERE has_added_app=1 and uid IN (SELECT uid2 FROM friend WHERE uid1 = {$this->fbData['user_id']})";
+            return $this->_doFQLQuery($fql);
+        }
     }
 
     private function _parseSignedRequest()
@@ -125,7 +148,7 @@ class Application_Model_Facebook
         // Check if the user is authed
         if (!$this->isAuthed)
         {
-            throw new Exception('User is not authenticated');
+            throw new Application_Model_FacebookException('User is not authenticated');
         }
         // Create an instance of the Http Client
         $http = new Zend_Http_Client($url);
@@ -136,10 +159,11 @@ class Application_Model_Facebook
         try {
             // do the request
             $request = $http->request();
+          
             // if the status isn't 200 (OK)
             if($request->getStatus() != 200)
             {
-                throw new Exception('Error requesting data.. Status: '.$request->getStatus());
+                throw new Application_Model_FacebookException('Error requesting data.. Status: '.$request->getStatus());
             }
             else
             {
@@ -149,9 +173,28 @@ class Application_Model_Facebook
         }
         catch (Exception $e)
         {
-            throw new Exception('Error from Facebook API: '.$e->getMessage());
+            throw new Application_Model_FacebookException('Error from Facebook API: '.$e->getMessage());
         }
+    }
 
+    /**
+     * Gets data from the Facebook FQL API
+     * @param string $fql
+     */
+    protected function _doFQLQuery($fql)
+    {
+        // Check if the user is authed
+        if (!$this->isAuthed)
+        {
+            throw new Application_Model_FacebookException('User is not authenticated');
+        }
+        $url = self::FACEBOOK_FQL_URL;
+        $args = array(
+            'query' => $fql,
+            'format' => 'json'
+        );
+        
+        return $this->_getFromGraph($url, $args);
     }
 
 }
